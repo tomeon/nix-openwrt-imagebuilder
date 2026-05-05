@@ -36,22 +36,44 @@ in rec {
     ) hashes.targets;
 
   # filters hardware profiles from all boards.json files
-  identifyProfiles = profile:
-    builtins.concatMap (target:
+  identifyProfilesWith =
+    {
+      target ? null,
+      variant ? null,
+      profile,
+    }:
+    let
+      targets =
+        if target == null then
+          builtins.attrNames allProfiles
+        else
+          lib.filter (lib.flip lib.hasAttr allProfiles) (lib.toList target);
+    in
+    builtins.concatMap (
+      target:
+      let
+        allVariants = allProfiles.${target};
+        variants =
+          if variant == null then
+            builtins.attrNames allVariants
+          else
+            lib.filter (lib.flip lib.hasAttr allVariants) (lib.toList variant);
+      in
       map (variant: {
         # match return value
         inherit lib openwrtLib release target variant profile cachePath;
         pkgs = pkgs';
-      }) (
-        builtins.filter (variant:
-          allProfiles.${target}.${variant}.profiles ? ${profile}
-        ) (builtins.attrNames allProfiles.${target})
-      )
-    ) (builtins.attrNames allProfiles);
+      }) (builtins.filter (variant: allProfiles.${target}.${variant}.profiles ? ${profile}) variants)
+    ) targets;
 
-  identifyProfile = profile:
+  identifyProfileWith =
+    {
+      target ? null,
+      variant ? null,
+      profile,
+    }:
     let
-      matches = identifyProfiles profile;
+      matches = identifyProfilesWith { inherit target variant profile; };
     in
       if builtins.length matches == 1
       then builtins.head matches
@@ -64,4 +86,8 @@ in rec {
         '') matches}
         Using first.
       '' (builtins.head matches);
+
+  identifyProfiles = profile: identifyProfilesWith { inherit profile; };
+
+  identifyProfile = profile: identifyProfileWith { inherit profile; };
 }
